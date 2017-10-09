@@ -1,13 +1,13 @@
 # more info on makefiles 
 # http://www.cs.colby.edu/maxwell/courses/tutorials/maketutor/
 CC       := gcc
-CFLAGS   := -std=c99 -Wall
+CFLAGS   := -std=gnu99 -Wall -Wextra 
 # c99 standar, show a lot of warnings
 
 SRCDIR   := src
 BUILDDIR := build
 SRCEXT   := c # change to cc or cpp in a c++ project
-TARGET   := bin/sfserver
+TARGET   := bin/sfs
 
 SOURCES  := $(shell find $(SRCDIR) -type f -name *.c)
 OBJECTS  := $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.c=.o))
