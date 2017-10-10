@@ -10,7 +10,7 @@
 #include "status.h"
 
 #define MAX_BUFFER 4096
-#define WAIT_TIME  5
+#define WAIT_TIME  1
 
 int main(int argc, char *argv[]) {
 	const char *dir = DEFAULT_DIR;
@@ -46,9 +46,10 @@ int main(int argc, char *argv[]) {
 	fprintf(stdout, "[pid: %d][dir: %s]\nwaiting clients...\n", getpid(), dir);
 
 	for(;;) {
+		sleep(WAIT_TIME);
 		fifod = open(fifo_path, O_RDONLY);
 		if((read(fifod, msg_buffer, MAX_BUFFER)) != EOF)
-			printf("%s\n", msg_buffer);
+			printf("%s", msg_buffer);
 		close(fifod);
 	}
 	return 0;
