@@ -1,6 +1,12 @@
 #ifndef STATUS_H
 #define STATUS_H
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <dirent.h>
+#include <string.h>
+
 struct directory {
 	char **contents;
 	int file_count;

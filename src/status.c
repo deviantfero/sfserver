@@ -1,8 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <dirent.h>
-#include <string.h>
 #include "status.h"
 
 void print_dir_contents(const char *dir) {

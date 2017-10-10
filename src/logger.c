@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include "logger.h"
 
 void logger(const char* tag, const char* message) {
