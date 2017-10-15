@@ -5,22 +5,21 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <pthread.h>
 #include "consts.h"
 #include "logger.h"
 #include "status.h"
+#include "comms.h"
 
-#define MAX_BUFFER 4096
 #define WAIT_TIME  1
 
 int main(int argc, char *argv[]) {
 	const char *dir = DEFAULT_DIR;
 	const char *fifo_path = "/tmp/fifo";
-	bool debug = true;
-	char *msg_buffer = malloc(MAX_BUFFER);
-	int opt, fifod;
+	int opt;
 	struct directory *current_dir;
 
-	while((opt = getopt(argc, argv, "sD:")) != -1) {
+	while((opt = getopt(argc, argv, "D:")) != -1) {
 		switch(opt) {
 			case 'D': 
 				if((dir = realpath(optarg, NULL)) == NULL) {
@@ -28,7 +27,6 @@ int main(int argc, char *argv[]) {
 					exit(2);
 				}
 				break;
-			case 's': debug = false; break;
 			case '?':
 				if(opt == 'D') {
 					fprintf(stderr, "-%c requires an argument.\n", opt);
@@ -43,14 +41,33 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	current_dir = get_dir_contents(dir);
 	fprintf(stdout, "[pid: %d][dir: %s]\nwaiting clients...\n", getpid(), dir);
 
-	for(;;) {
+	char** msg = malloc(sizeof(char*) * 2);
+
+	// initializing pointer, good practice (?)
+	pthread_t* client_threads = malloc(sizeof(pthread_t)); 
+
+	for(int i = 0;;) {
 		sleep(WAIT_TIME);
-		fifod = open(fifo_path, O_RDONLY);
-		if((read(fifod, msg_buffer, MAX_BUFFER)) != EOF)
-			printf("%s", msg_buffer);
-		close(fifod);
+		msg = wait_message(fifo_path);
+		if(msg[SIGNAL] != NULL && msg[SENDER] != NULL) {
+			fprintf(stdout, "%s by %s", msg[SIGNAL], msg[SENDER]);
+
+			/* alloc enough space for one more pthread */
+			client_threads = realloc(client_threads, sizeof(pthread_t) * (i + 1));
+			if(pthread_create(client_threads + i, NULL, client_handler, &msg)) {
+				fprintf(stderr, "Error attending client\n");
+			}
+			
+			if(pthread_join(*(client_threads + i), NULL)) {
+				fprintf(stderr, "Error joining client\n");
+				exit(2);
+			}
+			i++;
+		}
 	}
+
 	return 0;
 }
