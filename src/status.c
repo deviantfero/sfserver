@@ -25,8 +25,9 @@ struct directory *get_dir_contents(const char *dir) {
 	struct directory *current_dir = malloc(sizeof(struct directory));
 	current_dir->contents = malloc(sizeof(char*));
 
-	if(current_dir == NULL)
+	if(current_dir == NULL) {
 		return NULL;
+	}
 
 	DIR *fd = opendir(dir);
 
@@ -36,7 +37,10 @@ struct directory *get_dir_contents(const char *dir) {
 			current_dir->contents[i] = dir_contents->d_name;
 			current_dir->file_count = i + 1;
 
-			if(current_dir->contents[i] == NULL) printf("null at %d\n", i);
+			if(current_dir->contents[i] == NULL) {
+				printf("null at %d\n", i);
+			}
+
 			i++;
 		}
 
