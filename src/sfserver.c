@@ -1,30 +1,34 @@
 #include <fcntl.h>
-#include <stdio.h>
-#include <unistd.h>
 #include <limits.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <string.h>
 #include <pthread.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+
+#include "comms.h"
 #include "consts.h"
 #include "logger.h"
 #include "status.h"
-#include "comms.h"
 
 #define WAIT_TIME  1
 
 void *client_handler(void*);
+struct server_status *status;
+pthread_mutex_t cc_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int main(int argc, char *argv[]) {
-	const char *dir = DEFAULT_DIR;
 	const char *fifo_path = "/tmp/sfs";
 	int opt;
-	struct directory *current_dir;
+	status = (struct server_status*) malloc(sizeof(struct server_status));
+	status->dir = DEFAULT_DIR;
 
 	while((opt = getopt(argc, argv, "D:")) != -1) {
 		switch(opt) {
 			case 'D': 
-				if((dir = realpath(optarg, NULL)) == NULL) {
+				if((status->dir = realpath(optarg, NULL)) == NULL) {
 					fprintf(stderr, "%s: No such path or directory.\n", argv[0]);
 					exit(2);
 				}
@@ -35,7 +39,7 @@ int main(int argc, char *argv[]) {
 				}
 				break;
 			default:
-				if((dir = realpath(DEFAULT_DIR, NULL)) == NULL) {
+				if((status->dir = realpath(DEFAULT_DIR, NULL)) == NULL) {
 					fprintf(stderr, "%s: No such path or directory.\n", argv[0]);
 					exit(2);
 				}
@@ -43,8 +47,11 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	current_dir = get_dir_contents(dir);
-	fprintf(stdout, "[pid: %d][dir: %s]\nwaiting clients...\n", getpid(), dir);
+	/* initializing server_status */
+	status->pid = getpid();
+	status->client_count = 0;
+	status->current_dir = get_dir_contents(status->dir);
+	fprint_status(stdout, status);
 
 	char** msg = malloc(sizeof(char*) * 2);
 
@@ -54,7 +61,9 @@ int main(int argc, char *argv[]) {
 	for(int i = 0;;) {
 		sleep(WAIT_TIME);
 		msg = wait_message(fifo_path);
+
 		if(msg[SIGNAL] != NULL && msg[SENDER] != NULL) {
+
 			/* alloc enough space for one more pthread */
 			client_threads = realloc(client_threads, sizeof(pthread_t) * (i + 1));
 			if(pthread_create(&client_threads[i], NULL, client_handler, msg)) {
@@ -69,6 +78,8 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	free(msg);
+	free(status);
 	return 0;
 }
 
@@ -78,12 +89,16 @@ void *client_handler(void *param_msg) {
 
 	if(cpipe_name == NULL) {
 		fprintf(stderr, "Error: in allocating cpipe_name\n");
-		return NULL;
+		pthread_exit(NULL);
 	}
+
+	pthread_mutex_lock(&cc_mutex);
+	status->client_count++;
+	fprint_status(stdout, status);
+	pthread_mutex_unlock(&cc_mutex);
 
 	/* we read where the client writes, thus we read from sfc(pid)w */
 	snprintf(cpipe_name, MAX_BUFFER, "/tmp/sfc%sw", msg[SENDER]);
-	fprintf(stdout, "started thread for (%s)...\n", msg[SENDER]);
 
 	while(1) {
 		sleep(WAIT_TIME);
@@ -93,6 +108,12 @@ void *client_handler(void *param_msg) {
 			fprintf(stdout, "handling ls signal (%s)\n", msg[SENDER]);
 		} else if(strncmp(msg[SIGNAL], MSG_EXIT, sizeof(MSG_LS)) == 0) {
 			fprintf(stdout, "closing thread for (%s)...\n", msg[SENDER]);
+
+			pthread_mutex_lock(&cc_mutex);
+			status->client_count--;
+			fprint_status(stdout, status);
+			pthread_mutex_unlock(&cc_mutex);
+
 			break;
 		}
 	}
