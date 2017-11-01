@@ -10,7 +10,7 @@ void print_dir_contents(const char *dir) {
 	}
 }
 
-void fprint_dir_contents(const char *dir, FILE* file) {
+void fprint_dir_contents(FILE *file, const char *dir) {
 	DIR *fd = opendir(dir);
 	struct dirent *dir_contents;
 	while((dir_contents = readdir(fd)) != NULL) {
@@ -18,6 +18,10 @@ void fprint_dir_contents(const char *dir, FILE* file) {
 			fprintf(file, "%s\n", dir_contents->d_name);
 		}
 	}
+}
+
+void fprint_status(FILE *file, struct server_status *s) {
+	fprintf(file, "[pid: %d][dir: %s][clients: %d]\n", s->pid, s->dir, s->client_count);
 }
 
 struct directory *get_dir_contents(const char *dir) {
