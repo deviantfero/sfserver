@@ -13,9 +13,11 @@
 
 #define WAIT_TIME  1
 
+void *client_handler(void*);
+
 int main(int argc, char *argv[]) {
 	const char *dir = DEFAULT_DIR;
-	const char *fifo_path = "/tmp/fifo";
+	const char *fifo_path = "/tmp/sfs";
 	int opt;
 	struct directory *current_dir;
 
@@ -53,15 +55,13 @@ int main(int argc, char *argv[]) {
 		sleep(WAIT_TIME);
 		msg = wait_message(fifo_path);
 		if(msg[SIGNAL] != NULL && msg[SENDER] != NULL) {
-			fprintf(stdout, "%s by %s", msg[SIGNAL], msg[SENDER]);
-
 			/* alloc enough space for one more pthread */
 			client_threads = realloc(client_threads, sizeof(pthread_t) * (i + 1));
-			if(pthread_create(client_threads + i, NULL, client_handler, &msg)) {
+			if(pthread_create(&client_threads[i], NULL, client_handler, msg)) {
 				fprintf(stderr, "Error attending client\n");
 			}
 			
-			if(pthread_join(*(client_threads + i), NULL)) {
+			if(pthread_detach(client_threads[i])) {
 				fprintf(stderr, "Error joining client\n");
 				exit(2);
 			}
@@ -70,4 +70,33 @@ int main(int argc, char *argv[]) {
 	}
 
 	return 0;
+}
+
+void *client_handler(void *param_msg) {
+	char** msg = (char**)param_msg;
+	char* cpipe_name = malloc(sizeof(MAX_BUFFER));
+
+	if(cpipe_name == NULL) {
+		fprintf(stderr, "Error: in allocating cpipe_name\n");
+		return NULL;
+	}
+
+	/* we read where the client writes, thus we read from sfc(pid)w */
+	snprintf(cpipe_name, MAX_BUFFER, "/tmp/sfc%sw", msg[SENDER]);
+	fprintf(stdout, "started thread for (%s)...\n", msg[SENDER]);
+
+	while(1) {
+		sleep(WAIT_TIME);
+		msg = wait_message(cpipe_name);
+		/* handle messages */
+		if(strncmp(msg[SIGNAL], MSG_LS, sizeof(MSG_LS)) == 0) {
+			fprintf(stdout, "handling ls signal (%s)\n", msg[SENDER]);
+		} else if(strncmp(msg[SIGNAL], MSG_EXIT, sizeof(MSG_LS)) == 0) {
+			fprintf(stdout, "closing thread for (%s)...\n", msg[SENDER]);
+			break;
+		}
+	}
+
+	free(cpipe_name);
+	pthread_exit(msg);
 }
