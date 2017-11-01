@@ -44,10 +44,3 @@ char **wait_message(const char *pipe_name) {
 	free(msg_buffer);
 	return msg;
 }
-
-
-void *client_handler(void *client) {
-	char*** real_client = (char***)client;
-	puts("hello thread world");
-	return client;
-}

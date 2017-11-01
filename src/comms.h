@@ -24,6 +24,5 @@
 /* messages should follow format "what;pid" */
 void send_message(const char *pipe_name, char *msg, bool do_unlink);
 char **wait_message(const char *pipe_name);
-void *client_handler(void *client);
 
 #endif /* ifndef COMMS_H */
