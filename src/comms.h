@@ -10,10 +10,13 @@
 #include <unistd.h>
 #include <stdbool.h>
 
+#include "utils.h"
+
 #define COMMS_H
 #define SIGNAL 0
 #define SENDER 1
 #define MAX_BUFFER 1024
+#define MAX_TOKENS 10
 #define MSG_LS     "ls"
 #define MSG_STATUS "status"
 #define MSG_UPLD   "upload"

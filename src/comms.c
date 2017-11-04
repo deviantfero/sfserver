@@ -7,10 +7,12 @@ void send_message(const char *pipe_name, char *msg, bool do_unlink) {
 	mkfifo(pipe_name, 0666);
 
 	int fifod = open(pipe_name, O_WRONLY);
-	char *processed_message = malloc(MAX_BUFFER);
 
-	snprintf(processed_message, MAX_BUFFER, "%s;%d\n", msg, getpid());
-	write(fifod, processed_message, MAX_BUFFER);
+	size_t msg_size = buffer_size("%s;%d\n", msg, getpid());
+	char *processed_message = malloc(msg_size);
+
+	snprintf(processed_message, msg_size, "%s;%d\n", msg, getpid());
+	write(fifod, processed_message, msg_size);
 	close(fifod);
 
 	if(do_unlink) unlink(pipe_name);
@@ -21,24 +23,26 @@ void send_message(const char *pipe_name, char *msg, bool do_unlink) {
  * strcuture that will be passed onto the handling thread
  * for that client */
 char **wait_message(const char *pipe_name) {
-	char *msg_buffer = malloc(MAX_BUFFER);
-	char **msg = malloc(sizeof(char*) * 2);
+	char *msg_buffer = malloc(1);
+	char byte = 0;
+	char **msg = malloc(sizeof(char*) * MAX_TOKENS);
 	char *token;
+	int count = 0;
 
 	if(msg_buffer == NULL || msg == NULL) {
 		return NULL;
 	}
 
 	int fifod = open(pipe_name, O_RDONLY);
-	read(fifod, msg_buffer, MAX_BUFFER);
 
-	for(int i = 0; (token = strsep(&msg_buffer, ";")) != NULL && i < 2; i++) {
-		msg[i] = malloc(sizeof(strlen(token)));
-		if(msg[i] == NULL) {
-			return NULL;
-		}
-		strcpy(msg[i], token);
+	while(read(fifod, &byte, 1) == 1) {
+		msg_buffer = realloc(msg_buffer, count  + 1);
+		msg_buffer[count] = byte;
+		count++;
 	}
+
+	for(int i = 0; (token = strsep(&msg_buffer, ";")) != NULL && i < MAX_TOKENS; i++)
+		msg[i] = token;
 
 	close(fifod);
 	free(msg_buffer);
