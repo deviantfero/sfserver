@@ -6,9 +6,12 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <string.h>
+#include "utils.h"
+#include "comms.h"
+
 
 struct directory {
-	char **contents;
+	struct file_status **files;
 	int file_count;
 };
 
@@ -16,20 +19,33 @@ struct server_status {
 	const char *dir;
 	struct directory *current_dir;
 	int client_count;
+	int downloads;
+	int uploads;
 	int pid;
 };
 
-/* prints a directory's content to stdout
- * receives the directory path as argument */
-void print_dir_contents(const char *dir);
+struct file_status {
+	char *name;
+	int dcount;
+};
 
-/* prints a directory's content to specified file
- * receives the directory path as argument */
-void fprint_dir_contents(FILE* file, const char *dir);
+/* receives a server_status struct and prints it's directories
+ * and stats on how many times they've been downloaded into a
+ * file specified by the [file] argument */
+void fprint_dir_status(FILE* file, struct server_status *status);
+
+/* receives a server_status struct and prints it's directories
+ * and stats on how many times they've been downloaded into a
+ * string specified by the [str] argument */
+char *sprint_dir_status(char *str, struct server_status *status);
 
 /* receives a server_status struct and prints it's contents
  * into FILE* specified by file param */
 void fprint_status(FILE *file, struct server_status *status);
+
+/* receives a server_status struct and prints it's current status
+ * string specified by the [str] argument */
+char *sprint_status(char *str, struct server_status *status);
 
 /* returns an array containing the names of
  * the directory's contents receives the 
