@@ -6,10 +6,10 @@ void fprint_dir_status(FILE *file, struct server_status *s) {
 	}
 }
 
-char *sprint_dir_status(char *str, struct server_status *s) {
+char *sprint_dir_status(struct server_status *s) {
 	size_t file_str_len = 0;
 	char *file_str;
-	str = malloc(1);
+	char *str = malloc(1);
 
 	for(int i = 0; i < s->current_dir->file_count; i ++) {
 		/* get size of resulting string */
@@ -36,10 +36,10 @@ void fprint_status(FILE *file, struct server_status *s) {
 			"[downloads: %d][uploads: %d]\n", s->pid, s->dir, s->client_count, s->downloads, s->uploads);
 }
 
-char *sprint_status(char *str, struct server_status *s) {
+char *sprint_status(struct server_status *s) {
 	int status_str_len = buffer_size("[pid: %d][dir: %s][clients: %d]"
 				"[downloads: %d][uploads: %d]\n", s->pid, s->dir, s->client_count, s->downloads, s->uploads);
-	str = malloc(status_str_len);
+	char *str = malloc(status_str_len);
 	snprintf(str, status_str_len, "[pid: %d][dir: %s][clients: %d]"
 				"[downloads: %d][uploads: %d]\n", s->pid, s->dir, s->client_count, s->downloads, s->uploads);
 	return str;

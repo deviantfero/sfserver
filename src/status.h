@@ -37,7 +37,7 @@ void fprint_dir_status(FILE* file, struct server_status *status);
 /* receives a server_status struct and prints it's directories
  * and stats on how many times they've been downloaded into a
  * string specified by the [str] argument */
-char *sprint_dir_status(char *str, struct server_status *status);
+char *sprint_dir_status(struct server_status *status);
 
 /* receives a server_status struct and prints it's contents
  * into FILE* specified by file param */
@@ -45,7 +45,7 @@ void fprint_status(FILE *file, struct server_status *status);
 
 /* receives a server_status struct and prints it's current status
  * string specified by the [str] argument */
-char *sprint_status(char *str, struct server_status *status);
+char *sprint_status(struct server_status *status);
 
 /* returns an array containing the names of
  * the directory's contents receives the 
