@@ -1,19 +1,18 @@
 #include <fcntl.h>
-#include <limits.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <getopt.h>
 
 #include "comms.h"
 #include "consts.h"
 #include "logger.h"
 #include "status.h"
-
-#define WAIT_TIME  1
 
 void *client_handler(void*);
 struct server_status *status;
@@ -60,8 +59,7 @@ int main(int argc, char *argv[]) {
 	pthread_t* client_threads = malloc(sizeof(pthread_t)); 
 
 	for(int i = 0;;) {
-		sleep(WAIT_TIME);
-		msg = wait_message(fifo_path);
+		msg = wait_message(fifo_path, DFT_TRIES);
 
 		if(msg[SIGNAL] != NULL && msg[SENDER] != NULL) {
 
@@ -75,6 +73,7 @@ int main(int argc, char *argv[]) {
 				fprintf(stderr, "Error joining client\n");
 				exit(2);
 			}
+			send_message(fifo_path, (char*)status->dir, true);
 			i++;
 		}
 	}
@@ -112,28 +111,36 @@ void *client_handler(void *param_msg) {
 	snprintf(rpipe_name, name_len, "/tmp/sfc%sw", msg[SENDER]);
 
 	while(1) {
-		sleep(WAIT_TIME);
-		msg = wait_message(rpipe_name);
+		msg = wait_message(rpipe_name, DFT_TRIES);
 
-		if(strncmp(msg[SIGNAL], MSG_LS, sizeof(MSG_LS)) == 0) {
-			fprintf(stdout, "handling ls signal (%s)\n", msg[SENDER]);
-			char* files_msg = sprint_dir_status(files_msg, status);
-			send_message(wpipe_name, files_msg, true);
-			free(files_msg);
-		} else if(strncmp(msg[SIGNAL], MSG_STATUS, sizeof(MSG_STATUS)) == 0){
-			fprintf(stdout, "handling status signal (%s)\n", msg[SENDER]);
-			char* status_msg = sprint_status(status_msg, status);
-			send_message(wpipe_name, status_msg, true);
-			free(status_msg);
-		} else if(strncmp(msg[SIGNAL], MSG_EXIT, sizeof(MSG_EXIT)) == 0) {
-			fprintf(stdout, "closing thread for (%s)...\n", msg[SENDER]);
+		if(msg[SIGNAL] != NULL && msg[SENDER] != NULL) {
+			if(strncmp(msg[SIGNAL], MSG_LS, sizeof(MSG_LS)) == 0) {
+				fprintf(stdout, "handling ls signal (%s)\n", msg[SENDER]);
+				char* files_msg = sprint_dir_status(status);
+				send_message(wpipe_name, files_msg, true);
+				free(files_msg);
+			} else if(strncmp(msg[SIGNAL], MSG_STATUS, sizeof(MSG_STATUS)) == 0){
+				fprintf(stdout, "handling status signal (%s)\n", msg[SENDER]);
+				char *status_msg = sprint_status(status);
+				send_message(wpipe_name, status_msg, true);
+				free(status_msg);
+			} else if(strncmp(msg[SIGNAL], MSG_UPLD, sizeof(MSG_EXIT)) == 0) {
+				msg = wait_message(rpipe_name, DFT_TRIES);
+				fprintf(stdout, "receiving %s from (%s)...\n", msg[SIGNAL], msg[SENDER]);
+				while(strncmp(msg[SIGNAL], MSG_DONE, sizeof(MSG_DONE)) != 0) {
+					msg = wait_message(rpipe_name, DFT_TRIES);
+					usleep(WAIT_TIME);
+				}
+			} else if(strncmp(msg[SIGNAL], MSG_EXIT, sizeof(MSG_EXIT)) == 0) {
+				fprintf(stdout, "closing thread for (%s)...\n", msg[SENDER]);
 
-			pthread_mutex_lock(&cc_mutex);
-			status->client_count--;
-			fprint_status(stdout, status);
-			pthread_mutex_unlock(&cc_mutex);
+				pthread_mutex_lock(&cc_mutex);
+				status->client_count--;
+				fprint_status(stdout, status);
+				pthread_mutex_unlock(&cc_mutex);
 
-			break;
+				break;
+			}
 		}
 	}
 
