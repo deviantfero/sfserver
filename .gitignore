@@ -18,6 +18,7 @@ bin
 # Precompiled Headers
 *.gch
 *.pch
+*.ycm*
 
 # Libraries
 *.lib
