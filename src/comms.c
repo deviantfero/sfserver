@@ -45,7 +45,6 @@ char **wait_message(const char *pipe_name, int tries) {
 	if(err == -1 && tries > 0) {
 		usleep(WAIT_TIME);
 		close(fifod);
-		free(msg_buffer);
 		return wait_message(pipe_name, tries - 1);
 	} else {
 		msg[SIGNAL] = NULL;
@@ -56,6 +55,5 @@ char **wait_message(const char *pipe_name, int tries) {
 		msg[i] = token;
 
 	close(fifod);
-	free(msg_buffer);
 	return msg;
 }
