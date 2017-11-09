@@ -15,7 +15,7 @@
 #define COMMS_H
 #define SIGNAL 0
 #define SENDER 1
-#define WAIT_TIME 10000
+#define WAIT_TIME 1000
 #define NO_TIMEOUT 0
 #define DFT_TRIES 5 // default number of tries
 #define MAX_BUFFER 1024
