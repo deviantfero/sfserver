@@ -12,7 +12,6 @@
 
 #include "comms.h"
 #include "consts.h"
-#include "logger.h"
 #include "status.h"
 #include "transfer.h"
 
@@ -75,7 +74,7 @@ int main(int argc, char *argv[]) {
 				fprintf(stderr, "Error joining client\n");
 				exit(2);
 			}
-			send_message(fifo_path, (char*)status->dir, true);
+			send_message(fifo_path, (char*)status->dir, false);
 			i++;
 		}
 	}
@@ -119,12 +118,12 @@ void *client_handler(void *param_msg) {
 			if(strncmp(msg[SIGNAL], MSG_LS, sizeof(MSG_LS)) == 0) {
 				fprintf(stdout, "handling ls signal (%s)\n", msg[SENDER]);
 				char* files_msg = sprint_dir_status(status);
-				send_message(wpipe_name, files_msg, true);
+				send_message(wpipe_name, files_msg, false);
 				free(files_msg);
 			} else if(strncmp(msg[SIGNAL], MSG_STATUS, sizeof(MSG_STATUS)) == 0){
 				fprintf(stdout, "handling status signal (%s)\n", msg[SENDER]);
 				char *status_msg = sprint_status(status);
-				send_message(wpipe_name, status_msg, true);
+				send_message(wpipe_name, status_msg, false);
 				free(status_msg);
 			} else if(strncmp(msg[SIGNAL], MSG_UPLD, sizeof(MSG_EXIT)) == 0) {
 				int total = 0; 
