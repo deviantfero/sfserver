@@ -14,6 +14,7 @@
 #include "consts.h"
 #include "logger.h"
 #include "status.h"
+#include "transfer.h"
 
 void *client_handler(void*);
 struct server_status *status;
@@ -126,32 +127,28 @@ void *client_handler(void *param_msg) {
 				send_message(wpipe_name, status_msg, true);
 				free(status_msg);
 			} else if(strncmp(msg[SIGNAL], MSG_UPLD, sizeof(MSG_EXIT)) == 0) {
+				int total = 0; 
 				/* receive chunksize */
 				msg = wait_message(rpipe_name, DFT_TRIES);
+				int chunksize = atoi(msg[SIGNAL]);
+				/* receive filesize */
+				msg = wait_message(rpipe_name, DFT_TRIES);
+				int filesize = atoi(msg[SIGNAL]);
 				/* receive filename */
 				msg = wait_message(rpipe_name, DFT_TRIES);
-				int total = 0, err = 0;
 				fprintf(stdout, "receiving %s from (%s)...\n", msg[SIGNAL], msg[SENDER]);
+
+				/* here goes select function for choosing method of receiving */
 				int nfd = open(msg[SIGNAL], O_WRONLY | O_CREAT | O_TRUNC, 0644);
-				while(1) {
-					msg = NULL;
-					msg = wait_message(rpipe_name, DFT_TRIES);
-					if (strncmp(msg[SIGNAL], MSG_DONE, sizeof(MSG_DONE)) == 0) break;
+				while((total += receive_pipe_file(rpipe_name, nfd, chunksize, filesize)) < filesize)
 
-					if((err = write(nfd, msg[SIGNAL], strlen(msg[SIGNAL]))) == -1) {
-						fprintf(stderr, "error writing: %s\n", msg[SIGNAL]);
-					} else {
-						total += err;
-						/* printf("strlen: %ld\n", strlen(msg[SIGNAL])); */
-						send_message(wpipe_name, "received", true);
-					}
-				}
 				fprintf(stdout, "done! transfered %d bytes from (%s)\n", total, msg[SENDER]);
-
 				pthread_mutex_lock(&cc_mutex);
 				status->uploads++;
+				status->current_dir = get_dir_contents(status->dir);
 				fprint_status(stdout, status);
 				pthread_mutex_unlock(&cc_mutex);
+
 			} else if(strncmp(msg[SIGNAL], MSG_EXIT, sizeof(MSG_EXIT)) == 0) {
 				fprintf(stdout, "closing thread for (%s)...\n", msg[SENDER]);
 
