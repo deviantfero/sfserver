@@ -18,7 +18,7 @@
 #define WAIT_TIME 1000
 #define NO_TIMEOUT 0
 #define MSG_TIMEOUT "TIMEOUT"
-#define DFT_TRIES 5 // default number of tries
+#define DFT_TRIES 10 // default number of tries
 #define MAX_BUFFER 1024
 #define MAX_TOKENS 10
 #define MSG_LS     "ls"
