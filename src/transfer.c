@@ -34,7 +34,7 @@ int send_pipe_file(const char *pipe_name, int src_fd, int chunksize, size_t file
 
 	close(src_fd);
 	close(fifod);
-	unlink(pipe_name);
+	/* unlink(pipe_name); */
 
 	return transfered;
 }
