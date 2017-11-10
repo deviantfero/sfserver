@@ -8,10 +8,10 @@ void send_message(const char *pipe_name, char *msg, bool do_unlink) {
 
 	int fifod = open(pipe_name, O_WRONLY);
 
-	size_t msg_size = buffer_size("%s;%d\n", msg, getpid());
+	int msg_size = buffer_size("%0*d%s", 7, getpid(), msg);
 	char *processed_message = malloc(msg_size);
 
-	snprintf(processed_message, msg_size, "%s;%d\n", msg, getpid());
+	snprintf(processed_message, msg_size, "%0*d%s", 7, getpid(), msg);
 	write(fifod, processed_message, msg_size);
 	close(fifod);
 
@@ -26,7 +26,6 @@ char **wait_message(const char *pipe_name, int tries) {
 	char *msg_buffer = malloc(1);
 	char byte = 0;
 	char **msg = malloc(sizeof(char*) * MAX_TOKENS);
-	char *token;
 	int count = 0;
 
 	if(msg_buffer == NULL || msg == NULL) {
@@ -46,13 +45,15 @@ char **wait_message(const char *pipe_name, int tries) {
 		usleep(WAIT_TIME);
 		close(fifod);
 		return wait_message(pipe_name, tries - 1);
-	} else {
+	} else if(tries == 0){
 		msg[SIGNAL] = NULL;
 		msg[SENDER] = NULL;
+	} else {
+		msg[SENDER] = malloc(count);
+		msg[SIGNAL] = malloc(count);
+		snprintf(msg[SENDER], 8, "%s", msg_buffer);
+		snprintf(msg[SIGNAL], count - 7, "%s", msg_buffer + 7);
 	}
-
-	for(int i = 0; (token = strsep(&msg_buffer, ";")) != NULL && i < MAX_TOKENS; i++)
-		msg[i] = token;
 
 	close(fifod);
 	return msg;

@@ -96,7 +96,7 @@ void *client_handler(void *param_msg) {
 	pthread_mutex_unlock(&cc_mutex);
 
 	/* same length is true for both pipe's names */
-	name_len = buffer_size("/tmp/sfc%sw", msg[SENDER]);
+	name_len = buffer_size("/tmp/sfc%dw", atoi(msg[SENDER]));
 
 	rpipe_name = malloc(name_len);
 	wpipe_name = malloc(name_len);
@@ -108,8 +108,8 @@ void *client_handler(void *param_msg) {
 
 	/* we read where the client writes, thus we read from sfc(pid)w */
 	/* we wirte where the client reads, thus we write in sfc(pid)r */
-	snprintf(wpipe_name, name_len, "/tmp/sfc%sr", msg[SENDER]);
-	snprintf(rpipe_name, name_len, "/tmp/sfc%sw", msg[SENDER]);
+	snprintf(wpipe_name, name_len, "/tmp/sfc%dr", atoi(msg[SENDER]));
+	snprintf(rpipe_name, name_len, "/tmp/sfc%dw", atoi(msg[SENDER]));
 
 	while(1) {
 		msg = wait_message(rpipe_name, DFT_TRIES);
