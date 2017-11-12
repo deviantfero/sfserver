@@ -11,7 +11,6 @@
 #include <getopt.h>
 
 #include "comms.h"
-#include "consts.h"
 #include "status.h"
 #include "transfer.h"
 
@@ -23,14 +22,14 @@ int main(int argc, char *argv[]) {
 	const char *fifo_path = "/tmp/sfs";
 	int opt;
 	status = (struct server_status*) malloc(sizeof(struct server_status));
-	status->dir = DEFAULT_DIR;
+	status->current_dir = DEFAULT_DIR;
 	status->downloads = 0;
 	status->uploads = 0;
 
 	while((opt = getopt(argc, argv, "D:")) != -1) {
 		switch(opt) {
 			case 'D': 
-				if((status->dir = realpath(optarg, NULL)) == NULL) {
+				if((status->current_dir = realpath(optarg, NULL)) == NULL) {
 					fprintf(stderr, "%s: No such path or directory.\n", argv[0]);
 					exit(2);
 				}
@@ -41,7 +40,7 @@ int main(int argc, char *argv[]) {
 				}
 				break;
 			default:
-				if((status->dir = realpath(DEFAULT_DIR, NULL)) == NULL) {
+				if((status->current_dir = realpath(DEFAULT_DIR, NULL)) == NULL) {
 					fprintf(stderr, "%s: No such path or directory.\n", argv[0]);
 					exit(2);
 				}
@@ -52,7 +51,7 @@ int main(int argc, char *argv[]) {
 	/* initializing server_status */
 	status->pid = getpid();
 	status->client_count = 0;
-	status->current_dir = get_dir_contents(status->dir);
+	status->dir = get_dir_contents(status->current_dir);
 	fprint_status(stdout, status);
 
 	char** msg = malloc(sizeof(char*) * 2);
@@ -74,7 +73,7 @@ int main(int argc, char *argv[]) {
 				fprintf(stderr, "Error joining client\n");
 				exit(2);
 			}
-			send_message(fifo_path, (char*)status->dir, false);
+			send_message(fifo_path, (char*)status->dir, true);
 			i++;
 		}
 	}
@@ -118,15 +117,16 @@ void *client_handler(void *param_msg) {
 			if(strncmp(msg[SIGNAL], MSG_LS, sizeof(MSG_LS)) == 0) {
 				fprintf(stdout, "handling ls signal (%s)\n", msg[SENDER]);
 				char* files_msg = sprint_dir_status(status);
-				send_message(wpipe_name, files_msg, false);
+				send_message(wpipe_name, files_msg, true);
 				free(files_msg);
 			} else if(strncmp(msg[SIGNAL], MSG_STATUS, sizeof(MSG_STATUS)) == 0){
 				fprintf(stdout, "handling status signal (%s)\n", msg[SENDER]);
 				char *status_msg = sprint_status(status);
-				send_message(wpipe_name, status_msg, false);
+				send_message(wpipe_name, status_msg, true);
 				free(status_msg);
 			} else if(strncmp(msg[SIGNAL], MSG_UPLD, sizeof(MSG_EXIT)) == 0) {
-				int total = 0; 
+				int total = 0, fnamesize, nfd; 
+				char *dst_path;
 				/* receive chunksize */
 				msg = wait_message(rpipe_name, DFT_TRIES);
 				int chunksize = atoi(msg[SIGNAL]);
@@ -138,16 +138,49 @@ void *client_handler(void *param_msg) {
 				fprintf(stdout, "receiving %s from (%s)...\n", msg[SIGNAL], msg[SENDER]);
 
 				/* here goes select function for choosing method of receiving */
-				int nfd = open(msg[SIGNAL], O_WRONLY | O_CREAT | O_TRUNC, 0644);
-				while((total += receive_pipe_file(rpipe_name, nfd, chunksize, filesize)) < filesize)
+				fnamesize = buffer_size("%s/%s", status->current_dir, msg[SIGNAL]);
+				dst_path = malloc(fnamesize);
+				snprintf(dst_path, fnamesize, "%s/%s", status->current_dir, msg[SIGNAL]);
+				puts(dst_path);
+				nfd = open(dst_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+
+				while((total += receive_pipe_file(rpipe_name, nfd, chunksize, filesize)) < filesize);
 
 				fprintf(stdout, "done! transfered %d bytes from (%s)\n", total, msg[SENDER]);
 				pthread_mutex_lock(&cc_mutex);
 				status->uploads++;
-				status->current_dir = get_dir_contents(status->dir);
+				status->dir = get_dir_contents(status->current_dir);
 				fprint_status(stdout, status);
 				pthread_mutex_unlock(&cc_mutex);
 
+			
+			} else if(strncmp(msg[SIGNAL], MSG_DOWNLD, sizeof(MSG_DOWNLD)) == 0) {
+				int req_file;
+				fprintf(stdout, "handling download signal (%s)\n", msg[SENDER]);
+				char* files_msg = sprint_dir_status(status);
+				send_message(wpipe_name, files_msg, true);
+
+				int msg_size = buffer_size("%d", status->dir->file_count);
+				char* str_file_count = malloc(msg_size);
+				snprintf(str_file_count, msg_size, "%d", status->dir->file_count);
+				send_message(wpipe_name, str_file_count, true);
+
+				msg = wait_message(rpipe_name, DFT_TRIES);
+				req_file = atoi(msg[SIGNAL]);
+
+				fprintf(stdout, "%s - wants file: %s\n", msg[SENDER], status->dir->files[req_file]->name);
+				upload_file(wpipe_name, status->dir->files[req_file]->name, 0, NULL);
+				fprintf(stdout, "done! (%s)...\n", msg[SENDER]);
+
+				pthread_mutex_lock(&cc_mutex);
+				status->downloads++;
+				status->dir->files[req_file]->dcount++;
+				fprint_status(stdout, status);
+				fprint_dir_status(stdout, status);
+				pthread_mutex_unlock(&cc_mutex);
+
+				free(files_msg);
+				free(str_file_count);
 			} else if(strncmp(msg[SIGNAL], MSG_EXIT, sizeof(MSG_EXIT)) == 0) {
 				fprintf(stdout, "closing thread for (%s)...\n", msg[SENDER]);
 
