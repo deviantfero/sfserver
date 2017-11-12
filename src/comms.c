@@ -27,6 +27,7 @@ char **wait_message(const char *pipe_name, int tries) {
 		return NULL;
 	}
 
+	mkfifo(pipe_name, 0666);
 	int fifod = open(pipe_name, O_RDONLY);
 	int err = 0; // read return value
 
