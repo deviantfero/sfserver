@@ -16,8 +16,8 @@ struct directory {
 };
 
 struct server_status {
-	const char *dir;
-	struct directory *current_dir;
+	const char *current_dir;
+	struct directory *dir;
 	int client_count;
 	int downloads;
 	int uploads;
