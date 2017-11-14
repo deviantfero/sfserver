@@ -2,6 +2,7 @@
 #define TRANSFER_H
 
 #define TRANSFER_CHAR '#'
+#define DEFAULT_DIR "."
 
 #include <string.h>
 #include <fcntl.h>
@@ -16,7 +17,6 @@
 #include "utils.h"
 #include "comms.h"
 
-const char* DEFAULT_DIR = ".";
 
 enum method {
 	PIPES,
