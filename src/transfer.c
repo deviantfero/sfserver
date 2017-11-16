@@ -2,6 +2,7 @@
 
 int upload_file(const char *pipe_name, 
 				   char *src, 
+				   char *file_name,
 				   int chunksize, enum method *m) {
 
 	int src_fd;
@@ -26,7 +27,7 @@ int upload_file(const char *pipe_name,
 
 	send_message(pipe_name, cs, true);
 	send_message(pipe_name, fs, true);
-	send_message(pipe_name, src, true);
+	send_message(pipe_name, file_name, true);
 
 	return (send_pipe_file(pipe_name, src_fd, chunksize, filesize) == filesize);
 }

@@ -24,7 +24,7 @@ enum method {
 	SOCKETS
 };
 
-int upload_file(const char *pipe_name, char *src, int chunksize, enum method *m);
+int upload_file(const char *pipe_name, char *src, char *file_name, int chunksize, enum method *m);
 int send_pipe_file(const char *pipe_name, int src_fd, int chunksize, size_t file_size);
 int receive_pipe_file(const char *pipe_name, int piped, int chunksize, size_t filesize);
 void fprogress_bar(FILE *file, off_t file_size, size_t transfered);

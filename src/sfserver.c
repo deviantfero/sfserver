@@ -168,8 +168,11 @@ void *client_handler(void *param_msg) {
 				msg = wait_message(rpipe_name, DFT_TRIES);
 				req_file = atoi(msg[SIGNAL]);
 
-				fprintf(stdout, "%s - wants file: %s\n", msg[SENDER], status->dir->files[req_file]->name);
-				upload_file(wpipe_name, status->dir->files[req_file]->name, 0, NULL);
+				int fnamesize = buffer_size("%s/%s", status->current_dir, status->dir->files[req_file]->name);
+				char* src_path = malloc(fnamesize);
+				snprintf(src_path, fnamesize, "%s/%s", status->current_dir, status->dir->files[req_file]->name);
+				fprintf(stdout, "%s - wants file: %s\n", msg[SENDER], src_path);
+				upload_file(wpipe_name, src_path, status->dir->files[req_file]->name, 0, NULL);
 				fprintf(stdout, "done! (%s)...\n", msg[SENDER]);
 
 				pthread_mutex_lock(&cc_mutex);
