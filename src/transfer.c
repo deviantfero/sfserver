@@ -1,5 +1,14 @@
 #include "transfer.h"
 
+char* get_method_name(enum method m) {
+	switch(m) {
+		case PIPES:   return "pipes";
+		case QUEUE:   return "queue";
+		case SOCKETS: return "sockets";
+		default:      return "unknown";
+	}
+}
+
 int upload_file(const char *pipe_name, 
 				   char *src, 
 				   char *file_name,
@@ -52,6 +61,26 @@ int receive_pipe_file(const char *pipe_name, int piped, int chunksize, size_t fi
 	return count;
 }
 
+int receive_sock_file(const char *sock_name, int dst_fd, int chunksize, size_t filesize) {
+	int csock = make_named_sock(sock_name);
+	char buffer[chunksize + 1];
+	int err = 0, wchunk = 0, count = 0;
+
+	while((err = read(csock, buffer, chunksize)) > 0 && (size_t)count < filesize) {
+		/* making sure not to insert trash at the end of file */
+		chunksize = ((size_t)(filesize - count) > (size_t)chunksize) ? 
+					(size_t)chunksize : (size_t)(filesize - count);
+
+		if(err != -1 && (wchunk = write(dst_fd, buffer, chunksize)) != -1) {
+			count += wchunk;
+		}
+		fprogress_bar(stdout, filesize, count);
+		memset(buffer, 0, chunksize + 1);
+	}
+
+	return count;
+}
+
 int send_pipe_file(const char *pipe_name, int src_fd, int chunksize, size_t filesize) {
 	mkfifo(pipe_name, 0666);
 	int fifod = open(pipe_name, O_WRONLY), transfered = 0, chunk = 0, wchunk = 0;
@@ -91,4 +120,29 @@ void fprogress_bar(FILE *file, off_t file_size, size_t transfered) {
 
 	fprintf(file, "\r%3.2f%% %ld bytes [%-*s]", percentage, transfered, barsize - 1, progress_str);
 	fflush(file);
+}
+
+int make_named_sock(const char *sock_name){
+	struct sockaddr_un name;
+	int sock;
+	size_t size;
+
+	if((sock = socket(PF_LOCAL, SOCK_STREAM, 0)) < 0) {
+		fprintf(stderr, "socket not created\n");
+		return 0;
+	}
+
+	name.sun_family = AF_LOCAL;
+	strncpy(name.sun_path, sock_name, sizeof(name.sun_path));
+	name.sun_path[sizeof(name.sun_path) - 1] = '\0';
+
+	size = SUN_LEN(&name);
+	size = (offsetof (struct sockaddr_un, sun_path) + strlen(name.sun_path));
+
+	if(connect(sock, (struct sockaddr *)&name, size) < 0) {
+		fprintf(stderr, "socket connect fail: %s\n", strerror(errno));
+		return 0;
+	}
+
+	return sock;
 }
