@@ -86,8 +86,10 @@ int main(int argc, char *argv[]) {
 void *client_handler(void *param_msg) {
 	char** msg = (char**)param_msg;
 	size_t name_len = 0;
-	char* rpipe_name;
-	char* wpipe_name;
+	char *rpipe_name;
+	char *wpipe_name;
+	char *csock_name;
+	enum method m = PIPES;
 
 	pthread_mutex_lock(&cc_mutex);
 	status->client_count++;
@@ -99,6 +101,7 @@ void *client_handler(void *param_msg) {
 
 	rpipe_name = malloc(name_len);
 	wpipe_name = malloc(name_len);
+	csock_name = malloc(name_len);
 
 	if(rpipe_name == NULL || wpipe_name == NULL) {
 		fprintf(stdout, "error allocating either rpipe or wpipe names\n");
@@ -109,6 +112,7 @@ void *client_handler(void *param_msg) {
 	/* we wirte where the client reads, thus we write in sfc(pid)r */
 	snprintf(wpipe_name, name_len, "/tmp/sfc%dr", atoi(msg[SENDER]));
 	snprintf(rpipe_name, name_len, "/tmp/sfc%dw", atoi(msg[SENDER]));
+	snprintf(csock_name, name_len, "/tmp/ssfc%d", atoi(msg[SENDER]));
 
 	while(1) {
 		msg = wait_message(rpipe_name, DFT_TRIES);
@@ -124,6 +128,9 @@ void *client_handler(void *param_msg) {
 				char *status_msg = sprint_status(status);
 				send_message(wpipe_name, status_msg, true);
 				free(status_msg);
+			} else if(strncmp(msg[SIGNAL], MSG_METHOD, sizeof(MSG_EXIT)) == 0) {
+				msg = wait_message(rpipe_name, DFT_TRIES);
+				m   = atoi(msg[SIGNAL]);
 			} else if(strncmp(msg[SIGNAL], MSG_UPLD, sizeof(MSG_EXIT)) == 0) {
 				int total = 0, fnamesize, nfd; 
 				char *dst_path;
@@ -135,7 +142,7 @@ void *client_handler(void *param_msg) {
 				int filesize = atoi(msg[SIGNAL]);
 				/* receive filename */
 				msg = wait_message(rpipe_name, DFT_TRIES);
-				fprintf(stdout, "receiving %s from (%s)...\n", msg[SIGNAL], msg[SENDER]);
+				fprintf(stdout, "receiving %s from (%s) with (%s)...\n", msg[SIGNAL], msg[SENDER], get_method_name(m));
 
 				/* here goes select function for choosing method of receiving */
 				fnamesize = buffer_size("%s/%s", status->current_dir, msg[SIGNAL]);
@@ -144,9 +151,18 @@ void *client_handler(void *param_msg) {
 				puts(dst_path);
 				nfd = open(dst_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
-				while((total += receive_pipe_file(rpipe_name, nfd, chunksize, filesize)) < filesize);
+				switch(m) {
+					case PIPES: 
+						while((total += receive_pipe_file(rpipe_name, nfd, chunksize, filesize)) < filesize);
+						break;
+					case SOCKETS:
+						while((total += receive_sock_file(csock_name, nfd, chunksize, filesize)) < filesize);
+						break;
+					default:
+						break;
+				}
 
-				fprintf(stdout, "done! transfered %d bytes from (%s)\n", total, msg[SENDER]);
+				fprintf(stdout, "done! transfered %d bytes from (%s | %s)\n", total, msg[SENDER], dst_path);
 				pthread_mutex_lock(&cc_mutex);
 				status->uploads++;
 				status->dir = get_dir_contents(status->current_dir);
