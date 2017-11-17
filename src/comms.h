@@ -21,9 +21,10 @@
 #define DFT_TRIES 10 // default number of tries
 #define MAX_BUFFER 1024
 #define MAX_TOKENS 10
+#define MSG_METHOD "method"
 #define MSG_LS     "ls"
 #define MSG_STATUS "status"
-#define MSG_DONE "done"
+#define MSG_DONE   "done"
 #define MSG_UPLD   "upload"
 #define MSG_DOWNLD "download"
 #define MSG_EXIT   "bye"
