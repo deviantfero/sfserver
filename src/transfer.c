@@ -18,14 +18,10 @@ int upload_file(const char *pipe_name,
 	off_t filesize;
 	char fs[MAX_BUFFER];
 	char cs[MAX_BUFFER];
+	char sn[MAX_BUFFER];
 	/* enum method method_value = PIPES; */
 
 	if(chunksize == 0) chunksize = MAX_BUFFER;
-
-	/* method_value will decide which method we use in
-	 * the transfer by using a switch/case, function will
-	 * be split in the future */
-	/* if(m != NULL) method_value = *m; */
 
 	src_fd = open(src, O_RDONLY);
 	filesize = lseek(src_fd, 0, SEEK_END);
@@ -33,12 +29,17 @@ int upload_file(const char *pipe_name,
 
 	snprintf(fs, MAX_BUFFER, "%ld", filesize);
 	snprintf(cs, MAX_BUFFER, "%d", chunksize);
+	snprintf(sn, MAX_BUFFER, "/tmp/ssfc%d", atoi(pipe_name));
 
 	send_message(pipe_name, cs, true);
 	send_message(pipe_name, fs, true);
 	send_message(pipe_name, file_name, true);
 
-	return (send_pipe_file(pipe_name, src_fd, chunksize, filesize) == filesize);
+	switch(*m) {
+		case PIPES: return (send_pipe_file(pipe_name, src_fd, chunksize, filesize) == filesize);
+		case SOCKETS: return (send_sock_file(sn, src_fd, chunksize, filesize) == filesize);
+		default: return filesize;
+	}
 }
 
 int receive_pipe_file(const char *pipe_name, int piped, int chunksize, size_t filesize) {
@@ -62,7 +63,7 @@ int receive_pipe_file(const char *pipe_name, int piped, int chunksize, size_t fi
 }
 
 int receive_sock_file(const char *sock_name, int dst_fd, int chunksize, size_t filesize) {
-	int csock = make_named_sock(sock_name);
+	int csock = make_named_sock(sock_name, true);
 	char buffer[chunksize + 1];
 	int err = 0, wchunk = 0, count = 0;
 
@@ -101,6 +102,29 @@ int send_pipe_file(const char *pipe_name, int src_fd, int chunksize, size_t file
 }
 
 
+int send_sock_file(const char *sock_name, int src_fd, int chunksize, size_t filesize) {
+	int csock = make_named_sock(sock_name, false), ssock;
+	char buffer[chunksize + 1];
+	size_t transfered = 0, chunk = 0, wchunk = 0;
+
+	if(listen(csock, 10) < 0) {
+		fprintf(stderr, "failed to listen %s\n", strerror(errno));
+		return 0;
+	}
+
+	ssock = accept(csock, (struct sockaddr*)NULL, NULL);
+	for(int i = 0; (size_t)transfered < filesize; i++) {
+		if((chunk = read(src_fd, buffer, chunksize)) == -1) fprintf(stderr, "error reading a byte");
+		wchunk = write(ssock, buffer, chunksize);
+		if(wchunk != -1)
+			transfered += chunk;
+		fprogress_bar(stdout, filesize, transfered);
+	}
+	close(ssock);
+
+	return transfered;
+}
+
 void fprogress_bar(FILE *file, off_t file_size, size_t transfered) {
 	float percentage = ((float)100/file_size) * transfered;
 	struct winsize size;
@@ -122,7 +146,7 @@ void fprogress_bar(FILE *file, off_t file_size, size_t transfered) {
 	fflush(file);
 }
 
-int make_named_sock(const char *sock_name){
+int make_named_sock(const char *sock_name, bool recv){
 	struct sockaddr_un name;
 	int sock;
 	size_t size;
@@ -139,8 +163,10 @@ int make_named_sock(const char *sock_name){
 	size = SUN_LEN(&name);
 	size = (offsetof (struct sockaddr_un, sun_path) + strlen(name.sun_path));
 
-	if(connect(sock, (struct sockaddr *)&name, size) < 0) {
-		fprintf(stderr, "socket connect fail: %s\n", strerror(errno));
+	int status = recv ? connect(sock, (struct sockaddr *)&name, size) : 
+						bind(sock, (struct sockaddr *)&name, size);
+	if(status < 0) {
+		fprintf(stderr, "socket connect|bind fail: %s\n", strerror(errno));
 		return 0;
 	}
 
