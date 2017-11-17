@@ -131,6 +131,7 @@ void *client_handler(void *param_msg) {
 			} else if(strncmp(msg[SIGNAL], MSG_METHOD, sizeof(MSG_EXIT)) == 0) {
 				msg = wait_message(rpipe_name, DFT_TRIES);
 				m   = atoi(msg[SIGNAL]);
+				fprintf(stdout, "handling method signal (%s), new method (%s)\n", msg[SENDER], get_method_name(m));
 			} else if(strncmp(msg[SIGNAL], MSG_UPLD, sizeof(MSG_EXIT)) == 0) {
 				int total = 0, fnamesize, nfd; 
 				char *dst_path;
@@ -188,7 +189,7 @@ void *client_handler(void *param_msg) {
 				char* src_path = malloc(fnamesize);
 				snprintf(src_path, fnamesize, "%s/%s", status->current_dir, status->dir->files[req_file]->name);
 				fprintf(stdout, "%s - wants file: %s\n", msg[SENDER], src_path);
-				upload_file(wpipe_name, src_path, status->dir->files[req_file]->name, 0, NULL);
+				upload_file(wpipe_name, src_path, status->dir->files[req_file]->name, 0, &m);
 				fprintf(stdout, "done! (%s)...\n", msg[SENDER]);
 
 				pthread_mutex_lock(&cc_mutex);
