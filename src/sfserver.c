@@ -89,7 +89,13 @@ void *client_handler(void *param_msg) {
 	char *rpipe_name;
 	char *wpipe_name;
 	char *csock_name;
-	enum method m = PIPES;
+	struct options *client = malloc(sizeof(struct options));
+
+	client->m = PIPES;
+	client->encrypt   = false;
+	client->compress  = false;
+	client->chunksize = 0;
+	client->pid = atoi(msg[SENDER]);
 
 	pthread_mutex_lock(&cc_mutex);
 	status->client_count++;
@@ -97,7 +103,7 @@ void *client_handler(void *param_msg) {
 	pthread_mutex_unlock(&cc_mutex);
 
 	/* same length is true for both pipe's names */
-	name_len = buffer_size("/tmp/sfc%dw", atoi(msg[SENDER]));
+	name_len = buffer_size("/tmp/sfc%dw", client->pid);
 
 	rpipe_name = malloc(name_len);
 	wpipe_name = malloc(name_len);
@@ -110,40 +116,49 @@ void *client_handler(void *param_msg) {
 
 	/* we read where the client writes, thus we read from sfc(pid)w */
 	/* we wirte where the client reads, thus we write in sfc(pid)r */
-	snprintf(wpipe_name, name_len, "/tmp/sfc%dr", atoi(msg[SENDER]));
-	snprintf(rpipe_name, name_len, "/tmp/sfc%dw", atoi(msg[SENDER]));
-	snprintf(csock_name, name_len, "/tmp/ssfc%d", atoi(msg[SENDER]));
+	snprintf(wpipe_name, name_len, "/tmp/sfc%dr", client->pid);
+	snprintf(rpipe_name, name_len, "/tmp/sfc%dw", client->pid);
+	snprintf(csock_name, name_len, "/tmp/ssfc%d", client->pid);
 
 	while(1) {
 		msg = wait_message(rpipe_name, DFT_TRIES);
 
 		if(msg[SIGNAL] != NULL && msg[SENDER] != NULL) {
 			if(strncmp(msg[SIGNAL], MSG_LS, sizeof(MSG_LS)) == 0) {
+				/* send server directory status to client */
 				fprintf(stdout, "handling ls signal (%s)\n", msg[SENDER]);
 				char* files_msg = sprint_dir_status(status);
 				send_message(wpipe_name, files_msg, true);
 				free(files_msg);
 			} else if(strncmp(msg[SIGNAL], MSG_STATUS, sizeof(MSG_STATUS)) == 0){
+				/* send server status to client */
 				fprintf(stdout, "handling status signal (%s)\n", msg[SENDER]);
 				char *status_msg = sprint_status(status);
 				send_message(wpipe_name, status_msg, true);
 				free(status_msg);
-			} else if(strncmp(msg[SIGNAL], MSG_METHOD, sizeof(MSG_EXIT)) == 0) {
+			} else if(strncmp(msg[SIGNAL], MSG_METHOD, sizeof(MSG_METHOD)) == 0) {
+				/* update method for client */
 				msg = wait_message(rpipe_name, DFT_TRIES);
-				m   = atoi(msg[SIGNAL]);
-				fprintf(stdout, "handling method signal (%s), new method (%s)\n", msg[SENDER], get_method_name(m));
+				client->m   = atoi(msg[SIGNAL]);
+				fprintf(stdout, "handling method signal (%s), new method (%s)\n", msg[SENDER], get_method_name(client->m));
+			} else if(strncmp(msg[SIGNAL], MSG_CHUNKSIZE, sizeof(MSG_CHUNKSIZE)) == 0) {
+				/* update chunk size for client */
+				msg = wait_message(rpipe_name, DFT_TRIES);
+				client->chunksize = atoi(msg[SIGNAL]);
+				fprintf(stdout, "handling chunksize signal (%s), new chunksize (%d)\n", msg[SENDER], client->chunksize);
+			} else if(strncmp(msg[SIGNAL], MSG_ENCRYPT, sizeof(MSG_ENCRYPT)) == 0) {
+				/* turn on/off encryption */
+				client->encrypt = !client->encrypt;
+				fprintf(stdout, "handling encrypt signal (%s), encryption (%s)\n", msg[SENDER], client->encrypt ? "on" : "off");
 			} else if(strncmp(msg[SIGNAL], MSG_UPLD, sizeof(MSG_EXIT)) == 0) {
 				int total = 0, fnamesize, nfd; 
 				char *dst_path;
-				/* receive chunksize */
-				msg = wait_message(rpipe_name, DFT_TRIES);
-				int chunksize = atoi(msg[SIGNAL]);
 				/* receive filesize */
 				msg = wait_message(rpipe_name, DFT_TRIES);
 				int filesize = atoi(msg[SIGNAL]);
 				/* receive filename */
 				msg = wait_message(rpipe_name, DFT_TRIES);
-				fprintf(stdout, "receiving %s from (%s) with (%s)...\n", msg[SIGNAL], msg[SENDER], get_method_name(m));
+				fprintf(stdout, "receiving %s from (%s) with (%s)...\n", msg[SIGNAL], msg[SENDER], get_method_name(client->m));
 
 				/* here goes select function for choosing method of receiving */
 				fnamesize = buffer_size("%s/%s", status->current_dir, msg[SIGNAL]);
@@ -152,17 +167,18 @@ void *client_handler(void *param_msg) {
 				puts(dst_path);
 				nfd = open(dst_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
-				switch(m) {
+				switch(client->m) {
 					case PIPES: 
-						while((total += receive_pipe_file(rpipe_name, nfd, chunksize, filesize)) < filesize);
+						while((total += receive_pipe_file(rpipe_name, nfd, client, filesize)) < filesize);
 						break;
 					case SOCKETS:
-						while((total += receive_sock_file(csock_name, nfd, chunksize, filesize)) < filesize);
+						while((total += receive_sock_file(csock_name, nfd, client, filesize)) < filesize);
 						break;
 					default:
 						break;
 				}
 
+				/* update status */
 				fprintf(stdout, "done! transfered %d bytes from (%s | %s)\n", total, msg[SENDER], dst_path);
 				pthread_mutex_lock(&cc_mutex);
 				status->uploads++;
@@ -182,16 +198,20 @@ void *client_handler(void *param_msg) {
 				snprintf(str_file_count, msg_size, "%d", status->dir->file_count);
 				send_message(wpipe_name, str_file_count, true);
 
+				/* receive number of file requested */
 				msg = wait_message(rpipe_name, DFT_TRIES);
 				req_file = atoi(msg[SIGNAL]);
 
+				/* concatenate full path of file */
 				int fnamesize = buffer_size("%s/%s", status->current_dir, status->dir->files[req_file]->name);
 				char* src_path = malloc(fnamesize);
 				snprintf(src_path, fnamesize, "%s/%s", status->current_dir, status->dir->files[req_file]->name);
 				fprintf(stdout, "%s - wants file: %s\n", msg[SENDER], src_path);
-				upload_file(wpipe_name, src_path, status->dir->files[req_file]->name, 0, &m);
+
+				upload_file(wpipe_name, src_path, status->dir->files[req_file]->name, client);
 				fprintf(stdout, "done! (%s)...\n", msg[SENDER]);
 
+				/* update status */
 				pthread_mutex_lock(&cc_mutex);
 				status->downloads++;
 				status->dir->files[req_file]->dcount++;
