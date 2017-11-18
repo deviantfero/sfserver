@@ -20,20 +20,16 @@
 #include <stdbool.h>
 #include "utils.h"
 #include "comms.h"
+#include "encrypt.h"
 
 
-enum method {
-	PIPES,
-	QUEUE,
-	SOCKETS
-};
 
 char *get_method_name(enum method m);
-int upload_file(const char *pipe_name, char *src, char *file_name, int chunksize, enum method *m);
-int send_pipe_file(const char *pipe_name, int src_fd, int chunksize, size_t file_size);
-int send_sock_file(const char *sock_name, int src_fd, int chunksize, size_t filesize);
-int receive_pipe_file(const char *pipe_name, int piped, int chunksize, size_t filesize);
-int receive_sock_file(const char *sock_name, int dst_fd, int chunksize, size_t filesize);
+int upload_file(const char *pipe_name, char *src, char *file_name, struct options *opt);
+int send_pipe_file(const char *pipe_name, int src_fd, struct options *opt, size_t file_size);
+int send_sock_file(const char *sock_name, int src_fd, struct options *opt, size_t filesize);
+int receive_pipe_file(const char *pipe_name, int piped, struct options *opt, size_t filesize);
+int receive_sock_file(const char *sock_name, int dst_fd, struct options *opt, size_t filesize);
 int make_named_sock(const char *sock_name, bool recv);
 void fprogress_bar(FILE *file, off_t file_size, size_t transfered);
 
