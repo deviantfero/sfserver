@@ -99,6 +99,7 @@ void *client_handler(void *param_msg) {
 
 	pthread_mutex_lock(&cc_mutex);
 	status->client_count++;
+	fprintf(stdout, "(%d) joined successfully!\n", client->pid);
 	fprint_status(stdout, status);
 	pthread_mutex_unlock(&cc_mutex);
 
@@ -229,6 +230,8 @@ void *client_handler(void *param_msg) {
 				fprint_status(stdout, status);
 				pthread_mutex_unlock(&cc_mutex);
 				break;
+			} else {
+				fprintf(stdout, "unknown message [%s] by %s\n", msg[SIGNAL], msg[SENDER]);
 			}
 		}
 	}
