@@ -9,7 +9,7 @@ char* get_method_name(enum method m) {
 	}
 }
 
-int upload_file(const char *pipe_name, 
+ssize_t upload_file(const char *pipe_name, 
 				   char *src, 
 				   char *file_name,
 				   struct options *opt) {
@@ -18,6 +18,7 @@ int upload_file(const char *pipe_name,
 	off_t filesize;
 	char fs[MAX_BUFFER];
 	char sn[MAX_BUFFER];
+	char qn[MAX_BUFFER];
 	/* enum method method_value = PIPES; */
 
 	src_fd = open(src, O_RDONLY);
@@ -26,6 +27,7 @@ int upload_file(const char *pipe_name,
 
 	snprintf(fs, MAX_BUFFER, "%ld", filesize);
 	snprintf(sn, MAX_BUFFER, "/tmp/ssfc%d", opt->pid);
+	snprintf(qn, MAX_BUFFER, "/qsfc%d", opt->pid);
 
 	send_message(pipe_name, fs, true);
 	send_message(pipe_name, file_name, true);
@@ -33,18 +35,19 @@ int upload_file(const char *pipe_name,
 	switch(opt->m) {
 		case PIPES: return (send_pipe_file(pipe_name, src_fd, opt, filesize) == filesize);
 		case SOCKETS: return (send_sock_file(sn, src_fd, opt, filesize) == filesize);
+		case QUEUE: return (send_queue_file(qn, src_fd, opt, filesize) == filesize);
 		default: return filesize;
 	}
 }
 
-int receive_pipe_file(const char *pipe_name, int piped, struct options *opt, size_t filesize) {
-	int chunksize = opt->chunksize == 0 ? MAX_BUFFER : opt->chunksize;
-	int fifod = open(pipe_name, O_RDONLY), err, wchunk;
-	size_t count = 0;
+ssize_t receive_pipe_file(const char *pipe_name, int piped, struct options *opt, size_t filesize) {
+	ssize_t chunksize = opt->chunksize == 0 ? MAX_BUFFER : opt->chunksize;
+	int fifod = open(pipe_name, O_RDONLY); 
+	ssize_t err, wchunk, count = 0;
 	char byte[chunksize + 1];
 	memset(byte, 0, chunksize + 1);
 
-	while((err = read(fifod, byte, chunksize)) > 0 && count < filesize) {
+	while((err = read(fifod, byte, chunksize)) > 0 && (size_t)count < filesize) {
 		/* making sure not to insert trash at the end of file */
 		chunksize = ((size_t)(filesize - count) > (size_t)chunksize) ? 
 					(size_t)chunksize : (size_t)(filesize - count);
@@ -60,11 +63,43 @@ int receive_pipe_file(const char *pipe_name, int piped, struct options *opt, siz
 	return count;
 }
 
-int receive_sock_file(const char *sock_name, int dst_fd, struct options *opt, size_t filesize) {
-	int chunksize = opt->chunksize == 0 ? MAX_BUFFER : opt->chunksize;
+ssize_t receive_queue_file(const char *queue, int dst_fd, struct options *opt, size_t filesize) {
+	ssize_t chunksize = opt->chunksize == 0 ? MAX_BUFFER : opt->chunksize;
+	char buffer[chunksize + 1];
+	mqd_t msg_queue = mq_open(queue, O_RDONLY);
+	ssize_t err = 0, wchunk = 0, count = 0;
+
+	while((err = mq_receive(msg_queue, buffer, chunksize, NULL)) > 0) {
+		/* making sure not to insert trash at the end of file */
+		chunksize = ((size_t)(filesize - count) > (size_t)chunksize) ? 
+					(size_t)chunksize : (size_t)(filesize - count);
+
+		if(opt->encrypt) encrypt(buffer, KEY);
+
+		if(err != -1 && (wchunk = write(dst_fd, buffer, chunksize)) != -1) {
+			count += wchunk;
+		} else {
+			fprintf(stderr, "failed to receive from buffer: %s\n", strerror(errno));
+			break;
+		}
+		fprogress_bar(stdout, filesize, count);
+		memset(buffer, 0, chunksize + 1);
+
+		/* weird bug */
+		if((ssize_t)filesize - count == 0) {
+			mq_unlink(queue);
+			return count;
+		}
+	}
+	mq_unlink(queue);
+	return count;
+}
+
+ssize_t receive_sock_file(const char *sock_name, int dst_fd, struct options *opt, size_t filesize) {
+	ssize_t chunksize = opt->chunksize == 0 ? MAX_BUFFER : opt->chunksize;
 	int csock = make_named_sock(sock_name, true);
 	char buffer[chunksize + 1];
-	int err = 0, wchunk = 0, count = 0;
+	ssize_t err = 0, wchunk = 0, count = 0;
 
 	while((err = read(csock, buffer, chunksize)) > 0 && (size_t)count < filesize) {
 		/* making sure not to insert trash at the end of file */
@@ -86,9 +121,9 @@ int receive_sock_file(const char *sock_name, int dst_fd, struct options *opt, si
 	return count;
 }
 
-int send_pipe_file(const char *pipe_name, int src_fd, struct options *opt, size_t filesize) {
+ssize_t send_pipe_file(const char *pipe_name, int src_fd, struct options *opt, size_t filesize) {
 	mkfifo(pipe_name, 0666);
-	int chunksize = opt->chunksize == 0 ? MAX_BUFFER : opt->chunksize;
+	ssize_t chunksize = opt->chunksize == 0 ? MAX_BUFFER : opt->chunksize;
 	int fifod = open(pipe_name, O_WRONLY); 
 	ssize_t transfered = 0, chunk = 0, wchunk = 0;
 	char byte[chunksize + 1];
@@ -110,9 +145,41 @@ int send_pipe_file(const char *pipe_name, int src_fd, struct options *opt, size_
 	return transfered;
 }
 
-
-int send_sock_file(const char *sock_name, int src_fd, struct options *opt, size_t filesize) {
+ssize_t send_queue_file(const char *queue, int src_fd, struct options *opt, size_t filesize) {
 	int chunksize = opt->chunksize == 0 ? MAX_BUFFER : opt->chunksize;
+	struct mq_attr attr;
+	attr.mq_maxmsg = 10;
+	attr.mq_msgsize = chunksize;
+	mqd_t msg_queue = mq_open(queue, O_WRONLY | O_CREAT, 0666, &attr);
+	ssize_t transfered = 0, chunk = 0, wchunk = 0;
+	char buffer[chunksize + 1];
+
+	if(msg_queue < 0) {
+		fprintf(stderr, "failed to open queue: %s\n", strerror(errno));
+		return 0;
+	}
+
+	for(int i = 0; (size_t)transfered < filesize; i++) {
+		if((chunk = read(src_fd, buffer, chunksize)) == -1) fprintf(stderr, "error reading a buffer");
+
+		if(opt->encrypt) encrypt(buffer, KEY);
+
+		wchunk = mq_send(msg_queue, buffer, chunksize, PRIORITY);
+		if(wchunk == 0)
+			transfered += chunk;
+		else if(wchunk == -1)
+			fprintf(stderr, "failed to write queue: %s\n", strerror(errno));
+		fprogress_bar(stdout, filesize, transfered);
+	}
+
+	close(src_fd);
+	mq_unlink(queue);
+
+	return transfered;
+}
+
+ssize_t send_sock_file(const char *sock_name, int src_fd, struct options *opt, size_t filesize) {
+	ssize_t chunksize = opt->chunksize == 0 ? MAX_BUFFER : opt->chunksize;
 	int csock = make_named_sock(sock_name, false), ssock;
 	char buffer[chunksize + 1];
 	ssize_t transfered = 0, chunk = 0, wchunk = 0;
