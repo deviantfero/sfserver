@@ -86,9 +86,7 @@ int main(int argc, char *argv[]) {
 void *client_handler(void *param_msg) {
 	char** msg = (char**)param_msg;
 	size_t name_len = 0;
-	char *rpipe_name;
-	char *wpipe_name;
-	char *csock_name;
+	char *rpipe_name, *wpipe_name, *csock_name, *queue_name;
 	struct options *client = malloc(sizeof(struct options));
 
 	client->m = PIPES;
@@ -109,6 +107,7 @@ void *client_handler(void *param_msg) {
 	rpipe_name = malloc(name_len);
 	wpipe_name = malloc(name_len);
 	csock_name = malloc(name_len);
+	queue_name = malloc(name_len);
 
 	if(rpipe_name == NULL || wpipe_name == NULL) {
 		fprintf(stdout, "error allocating either rpipe or wpipe names\n");
@@ -120,6 +119,7 @@ void *client_handler(void *param_msg) {
 	snprintf(wpipe_name, name_len, "/tmp/sfc%dr", client->pid);
 	snprintf(rpipe_name, name_len, "/tmp/sfc%dw", client->pid);
 	snprintf(csock_name, name_len, "/tmp/ssfc%d", client->pid);
+	snprintf(queue_name, name_len, "/qsfc%d", client->pid);
 
 	while(1) {
 		msg = wait_message(rpipe_name, DFT_TRIES);
@@ -170,13 +170,15 @@ void *client_handler(void *param_msg) {
 
 				switch(client->m) {
 					case PIPES: 
-						while((total += receive_pipe_file(rpipe_name, nfd, client, filesize)) < filesize);
+						total += receive_pipe_file(rpipe_name, nfd, client, filesize);
 						break;
 					case SOCKETS:
-						while((total += receive_sock_file(csock_name, nfd, client, filesize)) < filesize);
+						total += receive_sock_file(csock_name, nfd, client, filesize);
 						break;
-					default:
+					case QUEUE:
+						total += receive_queue_file(queue_name, nfd, client, filesize);
 						break;
+					default: break;
 				}
 
 				/* update status */
