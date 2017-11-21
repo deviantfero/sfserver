@@ -10,3 +10,10 @@ int buffer_size(const char* format, ...) {
     va_end(args);
     return result + 1; // safe byte for \0
 }
+
+void encrypt(char *message, char * key, ssize_t chunksize) {
+    size_t keylen = buffer_size("%s", key);
+    for(ssize_t i = 0; i < chunksize; i++) {
+        message[i] = message[i] ^ key[i % keylen];
+    }
+}
