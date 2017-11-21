@@ -22,7 +22,6 @@
 #include <stdbool.h>
 #include "utils.h"
 #include "comms.h"
-#include "encrypt.h"
 
 
 

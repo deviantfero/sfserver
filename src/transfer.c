@@ -52,7 +52,7 @@ ssize_t receive_pipe_file(const char *pipe_name, int piped, struct options *opt,
 		chunksize = ((size_t)(filesize - count) > (size_t)chunksize) ? 
 					(size_t)chunksize : (size_t)(filesize - count);
 
-		if(opt->encrypt) encrypt(byte, KEY);
+		if(opt->encrypt) encrypt(byte, KEY, err);
 
 		if(err != -1 && (wchunk = write(piped, byte, chunksize)) != -1) {
 			count += wchunk;
@@ -74,7 +74,7 @@ ssize_t receive_queue_file(const char *queue, int dst_fd, struct options *opt, s
 		chunksize = ((size_t)(filesize - count) > (size_t)chunksize) ? 
 					(size_t)chunksize : (size_t)(filesize - count);
 
-		if(opt->encrypt) encrypt(buffer, KEY);
+		if(opt->encrypt) encrypt(buffer, KEY, err);
 
 		if(err != -1 && (wchunk = write(dst_fd, buffer, chunksize)) != -1) {
 			count += wchunk;
@@ -106,7 +106,7 @@ ssize_t receive_sock_file(const char *sock_name, int dst_fd, struct options *opt
 		chunksize = ((size_t)(filesize - count) > (size_t)chunksize) ? 
 					(size_t)chunksize : (size_t)(filesize - count);
 
-		if(opt->encrypt) encrypt(buffer, KEY);
+		if(opt->encrypt) encrypt(buffer, KEY, err);
 
 		if(err != -1 && (wchunk = write(dst_fd, buffer, chunksize)) != -1) {
 			count += wchunk;
@@ -131,7 +131,7 @@ ssize_t send_pipe_file(const char *pipe_name, int src_fd, struct options *opt, s
 	for(int i = 0; (size_t)transfered < filesize; i++) {
 		if((ssize_t)(chunk = read(src_fd, byte, chunksize)) == -1) fprintf(stderr, "error reading a byte");
 
-		if(opt->encrypt) encrypt(byte, KEY);
+		if(opt->encrypt) encrypt(byte, KEY, chunk);
 
 		wchunk = write(fifod, byte, chunksize);
 		if(wchunk != -1)
@@ -162,7 +162,7 @@ ssize_t send_queue_file(const char *queue, int src_fd, struct options *opt, size
 	for(int i = 0; (size_t)transfered < filesize; i++) {
 		if((chunk = read(src_fd, buffer, chunksize)) == -1) fprintf(stderr, "error reading a buffer");
 
-		if(opt->encrypt) encrypt(buffer, KEY);
+		if(opt->encrypt) encrypt(buffer, KEY, chunk);
 
 		wchunk = mq_send(msg_queue, buffer, chunksize, PRIORITY);
 		if(wchunk == 0)
@@ -173,8 +173,6 @@ ssize_t send_queue_file(const char *queue, int src_fd, struct options *opt, size
 	}
 
 	close(src_fd);
-	mq_unlink(queue);
-
 	return transfered;
 }
 
@@ -193,7 +191,7 @@ ssize_t send_sock_file(const char *sock_name, int src_fd, struct options *opt, s
 	for(int i = 0; (size_t)transfered < filesize; i++) {
 		if((chunk = read(src_fd, buffer, chunksize)) == -1) fprintf(stderr, "error reading a byte");
 
-		if(opt->encrypt) encrypt(buffer, KEY);
+		if(opt->encrypt) encrypt(buffer, KEY, chunk);
 
 		wchunk = write(ssock, buffer, chunksize);
 		if(wchunk != -1)
