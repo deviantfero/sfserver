@@ -127,31 +127,40 @@ void *client_handler(void *param_msg) {
 		if(msg[SIGNAL] != NULL && msg[SENDER] != NULL) {
 			if(strncmp(msg[SIGNAL], MSG_LS, sizeof(MSG_LS)) == 0) {
 				/* send server directory status to client */
+
 				fprintf(stdout, "handling ls signal (%s)\n", msg[SENDER]);
 				char* files_msg = sprint_dir_status(status);
 				send_message(wpipe_name, files_msg, true);
 				free(files_msg);
 			} else if(strncmp(msg[SIGNAL], MSG_STATUS, sizeof(MSG_STATUS)) == 0){
 				/* send server status to client */
+
 				fprintf(stdout, "handling status signal (%s)\n", msg[SENDER]);
 				char *status_msg = sprint_status(status);
 				send_message(wpipe_name, status_msg, true);
 				free(status_msg);
 			} else if(strncmp(msg[SIGNAL], MSG_METHOD, sizeof(MSG_METHOD)) == 0) {
 				/* update method for client */
+
 				msg = wait_message(rpipe_name, DFT_TRIES);
 				client->m   = atoi(msg[SIGNAL]);
 				fprintf(stdout, "handling method signal (%s), new method (%s)\n", msg[SENDER], get_method_name(client->m));
 			} else if(strncmp(msg[SIGNAL], MSG_CHUNKSIZE, sizeof(MSG_CHUNKSIZE)) == 0) {
 				/* update chunk size for client */
+
 				msg = wait_message(rpipe_name, DFT_TRIES);
 				client->chunksize = atoi(msg[SIGNAL]);
 				fprintf(stdout, "handling chunksize signal (%s), new chunksize (%d)\n", msg[SENDER], client->chunksize);
 			} else if(strncmp(msg[SIGNAL], MSG_ENCRYPT, sizeof(MSG_ENCRYPT)) == 0) {
 				/* turn on/off encryption */
+
 				client->encrypt = !client->encrypt;
 				fprintf(stdout, "handling encrypt signal (%s), encryption (%s)\n", msg[SENDER], client->encrypt ? "on" : "off");
-			} else if(strncmp(msg[SIGNAL], MSG_UPLD, sizeof(MSG_EXIT)) == 0) {
+			} else if(strncmp(msg[SIGNAL], MSG_COMPRESS, sizeof(MSG_COMPRESS)) == 0) {
+				/* turn on/off compression */
+				client->compress = !client->compress;
+				fprintf(stdout, "handling compress signal (%s), compression (%s)\n", msg[SENDER], client->compress ? "on" : "off");
+			} else if(strncmp(msg[SIGNAL], MSG_UPLD, sizeof(MSG_UPLD)) == 0) {
 				int total = 0, fnamesize, nfd; 
 				char *dst_path;
 				/* receive filesize */
@@ -165,7 +174,6 @@ void *client_handler(void *param_msg) {
 				fnamesize = buffer_size("%s/%s", status->current_dir, msg[SIGNAL]);
 				dst_path = malloc(fnamesize);
 				snprintf(dst_path, fnamesize, "%s/%s", status->current_dir, msg[SIGNAL]);
-				puts(dst_path);
 				nfd = open(dst_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
 				switch(client->m) {
@@ -181,7 +189,10 @@ void *client_handler(void *param_msg) {
 					default: break;
 				}
 
+
 				/* update status */
+				if(client->compress) inflate_file(dst_path, true);
+
 				fprintf(stdout, "done! transfered %d bytes from (%s | %s)\n", total, msg[SENDER], dst_path);
 				pthread_mutex_lock(&cc_mutex);
 				status->uploads++;

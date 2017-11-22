@@ -22,6 +22,7 @@
 #define DFT_TRIES 10 // default number of tries
 #define MAX_BUFFER 4096
 #define MAX_TOKENS 10
+#define MSG_COMPRESS  "compress"
 #define MSG_ENCRYPT   "encrypt"
 #define MSG_CHUNKSIZE "chunksize"
 #define MSG_METHOD    "method"
