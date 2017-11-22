@@ -13,7 +13,7 @@ SOURCES  := $(shell find $(SRCDIR) -type f -name *.c)
 OBJECTS  := $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.c=.o))
 
 INC := -I $(SRCDIR)
-LIB := -pthread -lrt
+LIB := -pthread -lrt -lz
 
 $(TARGET): $(OBJECTS)
 	@mkdir -p bin
