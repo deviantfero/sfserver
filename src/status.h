@@ -6,7 +6,6 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <string.h>
-#include "utils.h"
 #include "comms.h"
 
 

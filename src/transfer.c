@@ -14,12 +14,21 @@ ssize_t upload_file(const char *pipe_name,
 				   char *file_name,
 				   struct options *opt) {
 
+	int status;
 	int src_fd;
 	off_t filesize;
 	char fs[MAX_BUFFER];
 	char sn[MAX_BUFFER];
 	char qn[MAX_BUFFER];
 	/* enum method method_value = PIPES; */
+
+	if(opt->compress) {
+		int extsize = buffer_size("%s", file_name) + 3;
+		char *tmp_buffer = malloc(extsize);
+		snprintf(tmp_buffer, extsize, "%s.gz", file_name);
+		file_name = tmp_buffer;
+		src = deflate_file(src);
+	}
 
 	src_fd = open(src, O_RDONLY);
 	filesize = lseek(src_fd, 0, SEEK_END);
@@ -33,11 +42,21 @@ ssize_t upload_file(const char *pipe_name,
 	send_message(pipe_name, file_name, true);
 
 	switch(opt->m) {
-		case PIPES: return (send_pipe_file(pipe_name, src_fd, opt, filesize) == filesize);
-		case SOCKETS: return (send_sock_file(sn, src_fd, opt, filesize) == filesize);
-		case QUEUE: return (send_queue_file(qn, src_fd, opt, filesize) == filesize);
-		default: return filesize;
+		case PIPES: 
+			status = send_pipe_file(pipe_name, src_fd, opt, filesize) == filesize;
+			break;
+		case SOCKETS: 
+			status = send_sock_file(sn, src_fd, opt, filesize) == filesize;
+			break;
+		case QUEUE: 
+			status = send_queue_file(qn, src_fd, opt, filesize) == filesize;
+			break;
+		default: return 0;
 	}
+	
+	/* delete the .gz if compress mode on */
+	if(opt->compress) unlink(src);
+	return status;
 }
 
 ssize_t receive_pipe_file(const char *pipe_name, int piped, struct options *opt, size_t filesize) {
@@ -140,7 +159,6 @@ ssize_t send_pipe_file(const char *pipe_name, int src_fd, struct options *opt, s
 
 	close(src_fd);
 	close(fifod);
-	/* unlink(pipe_name); */
 
 	return transfered;
 }
