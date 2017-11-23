@@ -226,7 +226,7 @@ void fprogress_bar(FILE *file, off_t file_size, size_t transfered) {
 	struct winsize size;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &size);
 
-	int isize = buffer_size("\r%3.2f%% %d bytes", percentage, transfered);
+	int isize = buffer_size("\r%3.2f%% %d bytes ", percentage, transfered);
 	int barsize = size.ws_col - isize;
 
 	char *progress_str = malloc(size.ws_col - isize);
