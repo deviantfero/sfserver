@@ -193,7 +193,7 @@ void *client_handler(void *param_msg) {
 				/* update status */
 				if(client->compress) inflate_file(dst_path, true);
 
-				fprintf(stdout, "done! transfered %d bytes from (%s | %s)\n", total, msg[SENDER], dst_path);
+				fprintf(stdout, "\ndone! transfered %d bytes from (%s | %s)\n", total, msg[SENDER], dst_path);
 				pthread_mutex_lock(&cc_mutex);
 				status->uploads++;
 				status->dir = get_dir_contents(status->current_dir);
