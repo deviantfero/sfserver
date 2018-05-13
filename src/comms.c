@@ -14,6 +14,7 @@ void send_message(const char *pipe_name, char *msg, bool do_unlink) {
 	write(fifod, processed_message, pm_size);
 	close(fifod);
 
+	free(processed_message);
 	if(do_unlink) unlink(pipe_name);
 }
 
@@ -54,6 +55,7 @@ char **wait_message(const char *pipe_name, int tries) {
 	snprintf(msg[SENDER], 8, "%s", msg_buffer);
 	snprintf(msg[SIGNAL], count - 7, "%s", msg_buffer + 7);
 
+	free(msg_buffer);
 	close(fifod);
 	return msg;
 }

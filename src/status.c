@@ -27,7 +27,9 @@ char *sprint_dir_status(struct server_status *s) {
 
 		str = realloc(str, strlen(str) + file_str_len);
 		str = strncat(str, file_str, strlen(str) + file_str_len);
+		free(file_str);
 	}
+
 	return str;
 }
 

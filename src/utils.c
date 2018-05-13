@@ -62,6 +62,7 @@ ssize_t inflate_file(char *src, bool del) {
 
     gzclose(fi);
     close(fd);
+    free(usrc);
     if(del) unlink(src);
     return total;
 }
